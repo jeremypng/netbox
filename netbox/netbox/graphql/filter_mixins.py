@@ -1,8 +1,10 @@
 from functools import partialmethod
-from typing import List
+from typing import Any, Callable, List, Optional, TypeVar, Union
 
+from django.db.models import Q
 import django_filters
 import strawberry
+from strawberry.types import Info
 import strawberry_django
 from django.core.exceptions import FieldDoesNotExist
 from strawberry import auto
@@ -12,6 +14,7 @@ from netbox.graphql.scalars import BigInt
 from utilities.fields import ColorField, CounterCacheField
 from utilities.filters import *
 
+T = TypeVar("T")
 
 def map_strawberry_type(field):
     should_create_function = False
@@ -162,6 +165,8 @@ def autotype_decorator(filterset):
         cls.filterset = filterset
         fields = filterset.get_fields()
         model = filterset._meta.model
+
+        # Handle regular model fields
         for fieldname in fields.keys():
             should_create_function = False
             attr_type = auto
@@ -183,27 +188,34 @@ def autotype_decorator(filterset):
 
                 create_attribute_and_function(cls, fieldname, attr_type, should_create_function)
 
-        declared_filters = filterset.declared_filters
-        for fieldname, field in declared_filters.items():
-
-            should_create_function, attr_type = map_strawberry_type(field)
-            if attr_type is None:
-                raise NotImplementedError(f"GraphQL Filter field unknown: {fieldname}: {field}")
-
-            create_attribute_and_function(cls, fieldname, attr_type, should_create_function)
+        # Handle runtime filters
+        filterset_instance = filterset()
+        for filter_name, filter in filterset_instance.filters.items():
+            if filter_name.find('__') == -1:
+                should_create_function, attr_type = map_strawberry_type(filter)
+                if filter_name.startswith('cf_'):
+                    should_create_function = True
+                if attr_type is not None:
+                    create_attribute_and_function(cls, filter_name, attr_type, should_create_function)
 
         return cls
 
     return wrapper
-
 
 @strawberry.input
 class BaseFilterMixin:
 
     def filter_by_filterset(self, queryset, key):
         filterset = self.filterset(data={key: getattr(self, key)}, queryset=queryset)
-        if not filterset.is_valid():
-            # We could raise validation error but strawberry logs it all to the
-            # console i.e. raise ValidationError(f"{k}: {v[0]}")
+        try:
+            if not filterset.is_valid():
+                # We could raise validation error but strawberry logs it all to the
+                # console i.e. raise ValidationError(f"{k}: {v[0]}")
+                return filterset.qs.none()
+        except TypeError as e:
+            # Fallback to ORM filtering if filterset is not valid
+            filter_params = getattr(self, key)
+            if getattr(filter_params, 'exact', None):
+                return filterset._meta.model.objects.filter(**{filterset.filters[key].field_name: getattr(self,key).exact})
             return filterset.qs.none()
         return filterset.qs
