@@ -1,57 +1,80 @@
-from functools import partialmethod
-from typing import List
+from typing import TypeVar
 
+from datetime import datetime, date, time
+from django.db.utils import ProgrammingError, OperationalError
+from django.db.models.fields import BigAutoField, BigIntegerField, BooleanField, CharField, DateField, DateTimeField
+from django.db.models.fields import EmailField, GenericIPAddressField, IntegerField, PositiveIntegerField, SlugField
+from django.db.models.fields import TextField, URLField
 import django_filters
 import strawberry
-import strawberry_django
+from strawberry_django import FilterLookup, ComparisonFilterLookup, DateFilterLookup, DatetimeFilterLookup
+from strawberry_django import TimeFilterLookup
 from django.core.exceptions import FieldDoesNotExist
-from strawberry import auto
 
-from ipam.fields import ASNField
 from netbox.graphql.scalars import BigInt
-from utilities.fields import ColorField, CounterCacheField
 from utilities.filters import *
+
+T = TypeVar('T')
 
 
 def map_strawberry_type(field):
-    should_create_function = False
     attr_type = None
+
+    # Django Field types
+    if isinstance(field, BigAutoField):
+        attr_type = ComparisonFilterLookup[BigInt] | None
+    elif isinstance(field, BigIntegerField):
+        attr_type = ComparisonFilterLookup[BigInt] | None
+    elif isinstance(field, BooleanField):
+        attr_type = bool | None
+    elif isinstance(field, CharField):
+        attr_type = FilterLookup[str] | None
+    elif isinstance(field, DateField):
+        attr_type = DateFilterLookup[date] | None
+    elif isinstance(field, DateTimeField):
+        attr_type = DatetimeFilterLookup[datetime] | None
+    elif isinstance(field, EmailField):
+        attr_type = FilterLookup[str] | None
+    elif isinstance(field, GenericIPAddressField):
+        attr_type = FilterLookup[str] | None
+    elif isinstance(field, IntegerField):
+        attr_type = ComparisonFilterLookup[int] | None
+    elif isinstance(field, PositiveIntegerField):
+        attr_type = ComparisonFilterLookup[int] | None
+    elif isinstance(field, SlugField):
+        attr_type = FilterLookup[str] | None
+    elif isinstance(field, TextField):
+        attr_type = FilterLookup[str] | None
+    elif isinstance(field, URLField):
+        attr_type = FilterLookup[str] | None
 
     # NetBox Filter types - put base classes after derived classes
     if isinstance(field, ContentTypeFilter):
-        should_create_function = True
-        attr_type = str | None
+        attr_type = FilterLookup[str] | None
     elif isinstance(field, MultiValueArrayFilter):
         pass
     elif isinstance(field, MultiValueCharFilter):
-        # Note: Need to use the legacy FilterLookup from filters, not from
-        # strawberry_django.FilterLookup as we currently have USE_DEPRECATED_FILTERS
-        attr_type = strawberry_django.filters.FilterLookup[str] | None
+        attr_type = FilterLookup[str] | None
     elif isinstance(field, MultiValueDateFilter):
-        attr_type = auto
+        attr_type = DateFilterLookup[date] | None
     elif isinstance(field, MultiValueDateTimeFilter):
-        attr_type = auto
+        attr_type = DatetimeFilterLookup[datetime] | None
     elif isinstance(field, MultiValueDecimalFilter):
-        pass
+        attr_type = ComparisonFilterLookup[float] | None
     elif isinstance(field, MultiValueMACAddressFilter):
-        should_create_function = True
-        attr_type = List[str] | None
+        attr_type = FilterLookup[str] | None
     elif isinstance(field, MultiValueNumberFilter):
-        should_create_function = True
-        attr_type = List[str] | None
+        attr_type = ComparisonFilterLookup[int] | None
     elif isinstance(field, MultiValueTimeFilter):
-        pass
+        attr_type = TimeFilterLookup[time] | None
     elif isinstance(field, MultiValueWWNFilter):
-        should_create_function = True
-        attr_type = List[str] | None
+        attr_type = FilterLookup[str] | None
     elif isinstance(field, NullableCharFieldFilter):
-        pass
+        attr_type = FilterLookup[str] | None
     elif isinstance(field, NumericArrayFilter):
-        should_create_function = True
-        attr_type = int | None
+        attr_type = ComparisonFilterLookup[int] | None
     elif isinstance(field, TreeNodeMultipleChoiceFilter):
-        should_create_function = True
-        attr_type = List[str] | None
+        attr_type = FilterLookup[str] | None
 
     # From django_filters - ordering of these matters as base classes must
     # come after derived classes so the base class doesn't get matched first
@@ -72,60 +95,53 @@ def map_strawberry_type(field):
     elif issubclass(type(field), django_filters.TimeRangeFilter):
         pass
     elif issubclass(type(field), django_filters.IsoDateTimeFromToRangeFilter):
-        should_create_function = True
-        attr_type = str | None
+        attr_type = DatetimeFilterLookup[datetime] | None
     elif issubclass(type(field), django_filters.DateTimeFromToRangeFilter):
-        should_create_function = True
-        attr_type = str | None
+        attr_type = DatetimeFilterLookup[datetime] | None
     elif issubclass(type(field), django_filters.DateFromToRangeFilter):
-        should_create_function = True
-        attr_type = str | None
+        attr_type = DateFilterLookup[date] | None
     elif issubclass(type(field), django_filters.DateRangeFilter):
-        should_create_function = True
-        attr_type = str | None
+        attr_type = DateFilterLookup[date] | None
     elif issubclass(type(field), django_filters.RangeFilter):
-        pass
+        attr_type = ComparisonFilterLookup[int] | None
     elif issubclass(type(field), django_filters.NumericRangeFilter):
-        pass
+        attr_type = ComparisonFilterLookup[int] | None
     elif issubclass(type(field), django_filters.NumberFilter):
-        should_create_function = True
-        attr_type = int | None
+        attr_type = ComparisonFilterLookup[int] | None
     elif issubclass(type(field), django_filters.ModelMultipleChoiceFilter):
-        should_create_function = True
-        attr_type = List[str] | None
+        if (fieldname := getattr(field, "field_name")) and fieldname.endswith('_id'):
+            attr_type = int | None
+        else:
+            attr_type = str | None
     elif issubclass(type(field), django_filters.ModelChoiceFilter):
-        should_create_function = True
         attr_type = str | None
     elif issubclass(type(field), django_filters.DurationFilter):
-        pass
+        attr_type = FilterLookup[str] | None
     elif issubclass(type(field), django_filters.IsoDateTimeFilter):
-        pass
+        attr_type = DatetimeFilterLookup[datetime] | None
     elif issubclass(type(field), django_filters.DateTimeFilter):
-        attr_type = auto
+        attr_type = DatetimeFilterLookup[datetime] | None
     elif issubclass(type(field), django_filters.TimeFilter):
-        attr_type = auto
+        attr_type = TimeFilterLookup[time] | None
     elif issubclass(type(field), django_filters.DateFilter):
-        attr_type = auto
+        attr_type = DateFilterLookup[date] | None
     elif issubclass(type(field), django_filters.TypedMultipleChoiceFilter):
-        pass
+        attr_type = FilterLookup[str] | None
     elif issubclass(type(field), django_filters.MultipleChoiceFilter):
         attr_type = str | None
     elif issubclass(type(field), django_filters.TypedChoiceFilter):
-        pass
+        attr_type = FilterLookup[str] | None
     elif issubclass(type(field), django_filters.ChoiceFilter):
-        pass
+        attr_type = FilterLookup[str] | None
     elif issubclass(type(field), django_filters.BooleanFilter):
-        should_create_function = True
         attr_type = bool | None
     elif issubclass(type(field), django_filters.UUIDFilter):
-        should_create_function = True
-        attr_type = str | None
+        attr_type = FilterLookup[str] | None
     elif issubclass(type(field), django_filters.CharFilter):
         # looks like only used by 'q'
-        should_create_function = True
-        attr_type = str | None
+        attr_type = FilterLookup[str] | None
 
-    return should_create_function, attr_type
+    return attr_type
 
 
 def autotype_decorator(filterset):
@@ -149,48 +165,65 @@ def autotype_decorator(filterset):
     naming convention `filter_{fieldname}` which is auto detected and called by
     Strawberry, this function uses the filterset to handle the query.
     """
-    def create_attribute_and_function(cls, fieldname, attr_type, should_create_function):
+
+    def create_attribute(cls, fieldname, attr_type, custom_field=False):
         if fieldname not in cls.__annotations__ and attr_type:
             cls.__annotations__[fieldname] = attr_type
-
-        filter_name = f"filter_{fieldname}"
-        if should_create_function and not hasattr(cls, filter_name):
-            filter_by_filterset = getattr(cls, 'filter_by_filterset')
-            setattr(cls, filter_name, partialmethod(filter_by_filterset, key=fieldname))
 
     def wrapper(cls):
         cls.filterset = filterset
         fields = filterset.get_fields()
         model = filterset._meta.model
+
+        # Handle regular model fields
         for fieldname in fields.keys():
-            should_create_function = False
-            attr_type = auto
+            attr_type = None
             if fieldname not in cls.__annotations__:
                 try:
                     field = model._meta.get_field(fieldname)
                 except FieldDoesNotExist:
                     continue
 
-                if isinstance(field, CounterCacheField):
-                    should_create_function = True
-                    attr_type = BigInt | None
-                elif isinstance(field, ASNField):
-                    should_create_function = True
-                    attr_type = List[str] | None
-                elif isinstance(field, ColorField):
-                    should_create_function = True
-                    attr_type = List[str] | None
+                attr_type = map_strawberry_type(field)
 
-                create_attribute_and_function(cls, fieldname, attr_type, should_create_function)
+                create_attribute(cls, fieldname, attr_type)
 
+        # Handle filterset declared filters
         declared_filters = filterset.declared_filters
         for fieldname, field in declared_filters.items():
-
-            should_create_function, attr_type = map_strawberry_type(field)
+            attr_type = map_strawberry_type(field)
             if attr_type is None:
-                raise NotImplementedError(f"GraphQL Filter field unknown: {fieldname}: {field}")
+                raise NotImplementedError(f'GraphQL Filter field unknown: {fieldname}: {field}')
 
-            create_attribute_and_function(cls, fieldname, attr_type, should_create_function)
+            create_attribute(cls, fieldname, attr_type)
+
+        # Handle runtime custom field filters with an instance of the filterset
+        # This will fail if the database does not exist yet (ie: on first startup)
+        # so we need to catch the exception and continue
+        try:
+            filterset_instance = filterset()
+        except ProgrammingError:
+            # Occurs when initial database migrations have not been applied.
+            return cls
+        except OperationalError:
+            # Occurs during testing if there is no database as defined in configuration_testing.py
+            return cls
+
+        # Handle custom field filters and build a translation map for use in the resolver
+        if filterset_instance:
+            cls.__netbox_field_map__ = {}
+            for filter_name, filter in filterset_instance.filters.items():
+                if (
+                    getattr(filter, 'custom_field', None)
+                    and filter_name.find('__') == -1
+                    and filter_name not in cls.__annotations__
+                ):
+                    custom_field = True
+                    attr_type = map_strawberry_type(filter)
+                    if attr_type is not None:
+                        create_attribute(cls, filter_name, attr_type, custom_field)
+                    if filter.field_name:
+                        cls.__netbox_field_map__[filter_name] = filter.field_name
 
         return cls
 
@@ -198,12 +231,4 @@ def autotype_decorator(filterset):
 
 
 @strawberry.input
-class BaseFilterMixin:
-
-    def filter_by_filterset(self, queryset, key):
-        filterset = self.filterset(data={key: getattr(self, key)}, queryset=queryset)
-        if not filterset.is_valid():
-            # We could raise validation error but strawberry logs it all to the
-            # console i.e. raise ValidationError(f"{k}: {v[0]}")
-            return filterset.qs.none()
-        return filterset.qs
+class BaseFilterMixin: ...
