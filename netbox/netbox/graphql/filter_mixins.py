@@ -276,7 +276,7 @@ def autotype_decorator(filterset):
                     FilterSchemaBuilder.register_relationship(model, fieldname, related_model)
                     continue
             else:
-                attr_type = map_strawberry_type(field)
+                attr_type, _ = map_strawberry_type(field)
             if attr_type is None:
                 raise NotImplementedError(f'GraphQL Filter field unknown: {fieldname}: {field}')
 
@@ -304,7 +304,7 @@ def autotype_decorator(filterset):
                     and filter_name not in cls.__annotations__
                 ):
                     custom_field = True
-                    attr_type = map_strawberry_type(filter)
+                    attr_type, _ = map_strawberry_type(filter)
                     if attr_type is not None:
                         create_attribute(cls, filter_name, attr_type, custom_field)
                     if filter.field_name:
