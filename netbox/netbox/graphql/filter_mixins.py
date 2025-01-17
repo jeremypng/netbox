@@ -267,9 +267,9 @@ def autotype_decorator(filterset):
         declared_filters = filterset.declared_filters
         for fieldname, field in declared_filters.items():
             attr_type, register_relationship = map_strawberry_type(field)
-            if isinstance(field, django_filters.ModelChoiceFilter) and fieldname.endswith('_id'):
+            if (isinstance(field, django_filters.ModelMultipleChoiceFilter) or
+                isinstance(field, django_filters.ModelChoiceFilter)) and fieldname.endswith('_id'):
                 attr_type = int | None
-                continue
             elif register_relationship:
                 if getattr(field.queryset, 'model', None):
                     related_model = field.queryset.model
