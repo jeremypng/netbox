@@ -30,7 +30,6 @@ def finalize_filters():
     # Second pass: Create complete filters
     rebuilt_filters = FilterSchemaBuilder.rebuild_filters()
 
-    # Replace filter definitions in Query classes
     query_classes = [UsersQuery, CircuitsQuery, CoreQuery, DCIMQuery, ExtrasQuery,
                     IPAMQuery, TenancyQuery, VirtualizationQuery, VPNQuery, WirelessQuery]
 
@@ -43,18 +42,20 @@ def finalize_filters():
                     if arg.python_name == 'filters':
                         filter_type = unwrap_type(arg.type)
                         if hasattr(filter_type, 'filterset'):
-                            model_path = (
-                                f"{filter_type.filterset._meta.model.__module__}."
-                                f"{filter_type.filterset._meta.model.__name__}"
-                            )
+                            model_path = filter_type.filterset._meta.model.__module__
+                            model_path = model_path + "." + filter_type.filterset._meta.model.__name__
                             if model_path in rebuilt_filters:
-                                # Instead of creating a new type, update the existing one
                                 rebuilt_filter = rebuilt_filters[model_path]
-                                # Copy all attributes from rebuilt filter to existing filter
-                                for attr in dir(rebuilt_filter):
-                                    if not attr.startswith('__'):
+                                # Only copy specific attributes, avoiding deprecated ones
+                                attrs_to_copy = [
+                                    '__annotations__',
+                                    '__strawberry_definition__',
+                                    '__strawberry_django_definition__',
+                                    'filterset'
+                                ]
+                                for attr in attrs_to_copy:
+                                    if hasattr(rebuilt_filter, attr):
                                         setattr(filter_type, attr, getattr(rebuilt_filter, attr))
-
     return True
 
 

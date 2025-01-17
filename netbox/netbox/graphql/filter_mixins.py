@@ -7,7 +7,7 @@ from django.db.models.fields import BigAutoField, BigIntegerField, BooleanField,
 from django.db.models.fields import EmailField, GenericIPAddressField, IntegerField, PositiveIntegerField, SlugField
 from django.db.models.fields import TextField, URLField
 from django.db.models.fields.related_descriptors import (ForwardManyToOneDescriptor,
-    ReverseManyToOneDescriptor, ManyToManyDescriptor
+    ReverseManyToOneDescriptor
 )
 import django_filters
 import strawberry
@@ -50,16 +50,15 @@ class FilterSchemaBuilder:
 
             # Get original annotations from autotype decorator
             original_annotations = getattr(original_filter, '__annotations__', {})
-            annotations = original_annotations.copy()
+            annotations = original_annotations.copy()  # Make a copy to not modify original
 
-            # Add relationships info
-            relationships = {}
-            for field_name, target_model in cls._relationships.get(model_path, []):
+            # Add relationships, excluding self-references
+            relationships = cls._relationships.get(model_path, [])
+            for field_name, target_model in relationships:
                 target_path = f"{target_model.__module__}.{target_model.__name__}"
                 target_filter = cls._filter_stubs.get(target_path)
-                if target_filter and target_model != model:
+                if target_filter and target_model != model:  # Exclude self-references
                     annotations[field_name] = target_filter | None
-                    relationships[field_name] = target_filter
 
             # Create new filter with combined annotations
             new_filter = type(
@@ -79,6 +78,7 @@ class FilterSchemaBuilder:
 
 def map_strawberry_type(field):
     attr_type = None
+    register_relationship = False
 
     # Django Field types
     if isinstance(field, BigAutoField):
@@ -169,12 +169,9 @@ def map_strawberry_type(field):
     elif issubclass(type(field), django_filters.NumberFilter):
         attr_type = ComparisonFilterLookup[int] | None
     elif issubclass(type(field), django_filters.ModelMultipleChoiceFilter):
-        if (fieldname := getattr(field, "field_name")) and fieldname.endswith('_id'):
-            attr_type = int | None
-        else:
-            attr_type = str | None
+        register_relationship = True
     elif issubclass(type(field), django_filters.ModelChoiceFilter):
-        attr_type = str | None
+        register_relationship = True
     elif issubclass(type(field), django_filters.DurationFilter):
         attr_type = FilterLookup[str] | None
     elif issubclass(type(field), django_filters.IsoDateTimeFilter):
@@ -201,7 +198,7 @@ def map_strawberry_type(field):
         # looks like only used by 'q'
         attr_type = FilterLookup[str] | None
 
-    return attr_type
+    return attr_type, register_relationship
 
 
 def autotype_decorator(filterset):
@@ -244,7 +241,7 @@ def autotype_decorator(filterset):
                 except FieldDoesNotExist:
                     continue
 
-                attr_type = map_strawberry_type(field)
+                attr_type, _ = map_strawberry_type(field)
 
                 create_attribute(cls, fieldname, attr_type)
 
@@ -266,19 +263,20 @@ def autotype_decorator(filterset):
                 related_model = model_field.rel.related_model
                 FilterSchemaBuilder.register_relationship(model, fieldname, related_model)
 
-        # Handle related ManyToMany fields
-        many_to_many_fields = [attr[0] for attr in inspect.getmembers(model) if isinstance(attr[1],
-            ManyToManyDescriptor)]
-        for fieldname in many_to_many_fields:
-            if fieldname not in cls.__annotations__:
-                model_field = getattr(model, fieldname)
-                related_model = model_field.field.related_model
-                FilterSchemaBuilder.register_relationship(model, fieldname, related_model)
-
         # Handle filterset declared filters
         declared_filters = filterset.declared_filters
         for fieldname, field in declared_filters.items():
-            attr_type = map_strawberry_type(field)
+            attr_type, register_relationship = map_strawberry_type(field)
+            if isinstance(field, django_filters.ModelChoiceFilter) and fieldname.endswith('_id'):
+                attr_type = int | None
+                continue
+            elif register_relationship:
+                if getattr(field.queryset, 'model', None):
+                    related_model = field.queryset.model
+                    FilterSchemaBuilder.register_relationship(model, fieldname, related_model)
+                    continue
+            else:
+                attr_type = map_strawberry_type(field)
             if attr_type is None:
                 raise NotImplementedError(f'GraphQL Filter field unknown: {fieldname}: {field}')
 
