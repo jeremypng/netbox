@@ -6,7 +6,9 @@ from django.db.utils import ProgrammingError, OperationalError
 from django.db.models.fields import BigAutoField, BigIntegerField, BooleanField, CharField, DateField, DateTimeField
 from django.db.models.fields import EmailField, GenericIPAddressField, IntegerField, PositiveIntegerField, SlugField
 from django.db.models.fields import TextField, URLField
-from django.db.models.fields.related_descriptors import ForwardManyToOneDescriptor, ReverseManyToOneDescriptor
+from django.db.models.fields.related_descriptors import (ForwardManyToOneDescriptor,
+    ReverseManyToOneDescriptor, ManyToManyDescriptor
+)
 import django_filters
 import strawberry
 from strawberry_django import FilterLookup, ComparisonFilterLookup, DateFilterLookup, DatetimeFilterLookup
@@ -264,6 +266,15 @@ def autotype_decorator(filterset):
                 related_model = model_field.rel.related_model
                 FilterSchemaBuilder.register_relationship(model, fieldname, related_model)
 
+        # Handle related ManyToMany fields
+        many_to_many_fields = [attr[0] for attr in inspect.getmembers(model) if isinstance(attr[1],
+            ManyToManyDescriptor)]
+        for fieldname in many_to_many_fields:
+            if fieldname not in cls.__annotations__:
+                model_field = getattr(model, fieldname)
+                related_model = model_field.field.related_model
+                FilterSchemaBuilder.register_relationship(model, fieldname, related_model)
+
         # Handle filterset declared filters
         declared_filters = filterset.declared_filters
         for fieldname, field in declared_filters.items():
@@ -296,9 +307,6 @@ def autotype_decorator(filterset):
                 ):
                     custom_field = True
                     attr_type = map_strawberry_type(filter)
-                    # if attr_type == FilterLookup[str] | None:
-                    #     # FilterLookup won't work on custom_field_data, so we need to use str
-                    #     attr_type = str | None
                     if attr_type is not None:
                         create_attribute(cls, filter_name, attr_type, custom_field)
                     if filter.field_name:

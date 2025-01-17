@@ -1,3 +1,5 @@
+from functools import reduce
+import operator
 from typing import Optional
 import strawberry
 from strawberry.types import Info
@@ -81,29 +83,37 @@ def build_filter_q(filters, prefix: str = '') -> tuple[Q, set[str]]:
 
         # Handle logical operators (AND, OR, NOT)
         if field_name in ('AND', 'OR', 'NOT'):
-            nested_q = Q()
-            for filter_item in value:
+            items_q = []
+            filter_items = value if isinstance(value, (list, tuple)) else [value]
+
+            # First collect all the Q objects
+            for filter_item in filter_items:
                 item_q, item_fields = build_filter_q(filter_item, prefix)
                 used_fields.update(item_fields)
-                if field_name == 'AND':
-                    nested_q &= item_q
-                elif field_name == 'OR':
-                    nested_q |= item_q
-                else:  # NOT
-                    nested_q &= ~item_q
-            q &= nested_q
+                items_q.append(item_q)
+
+            # Important change: Different handling based on operator
+            if field_name == 'AND':
+                q &= reduce(operator.and_, items_q, Q())
+            elif field_name == 'OR':
+                q |= reduce(operator.or_, items_q, Q())
+            else:  # NOT
+                q &= ~reduce(operator.and_, items_q, Q())
             continue
 
         # Handle filter operation objects (like {i_exact: "value"})
+        current_q = Q()  # Create a separate Q object for this field
         if hasattr(value, '__dict__'):
             operations = vars(value)
             for op_name, op_value in operations.items():
                 if op_value is not strawberry.UNSET and op_name in FILTER_LOOKUPS:
-                    q &= FILTER_LOOKUPS[op_name](full_field, op_value)
-            continue
+                    current_q &= FILTER_LOOKUPS[op_name](full_field, op_value)
+        else:
+            # Default exact match for direct values
+            current_q = FILTER_LOOKUPS['exact'](full_field, value)
 
-        # Default exact match for direct values
-        q &= FILTER_LOOKUPS['exact'](full_field, value)
+        # Add the field's conditions to the main Q object
+        q &= current_q
 
     return q, used_fields
 

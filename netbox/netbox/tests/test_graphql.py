@@ -112,7 +112,7 @@ class GraphQLAPITestCase(APITestCase):
         self.assertEqual(len(data['data']['location_list']), 2)
 
         # An invalid request should return an empty list
-        query = '{location_list(filters: {site_id: "99999"}) {id site {id}}}'  # Invalid site ID
+        query = '{location_list(filters: {site_id: 99999}) {id site {id}}}'  # Invalid site ID
         response = self.client.post(url, data={'query': query}, format="json", **self.header)
         self.assertHttpStatus(response, status.HTTP_200_OK)
         data = json.loads(response.content)
