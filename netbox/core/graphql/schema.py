@@ -8,12 +8,14 @@ from .types import *
 from .filters import *
 from netbox.graphql.resolvers import list_resolver
 
+from netbox.graphql.fields import CustomStrawberryDjangoField
+
 
 @strawberry.type(name='Query')
 class CoreQuery:
     data_file: DataFileType = strawberry_django.field()
 
-    @strawberry_django.field
+    @strawberry_django.field(field_cls=CustomStrawberryDjangoField)
     def data_file_list(self, info: Info, filters: DataFileFilter | None = strawberry.UNSET) -> List[DataFileType]:
         queryset = DataFileType.__strawberry_django_definition__.model.objects.all()
         queryset = DataFileType.get_queryset(queryset, info)
@@ -21,7 +23,7 @@ class CoreQuery:
 
     data_source: DataSourceType = strawberry_django.field()
 
-    @strawberry_django.field
+    @strawberry_django.field(field_cls=CustomStrawberryDjangoField)
     def data_source_list(self, info: Info, filters: DataSourceFilter | None = strawberry.UNSET) -> List[DataSourceType]:
         queryset = DataSourceType.__strawberry_django_definition__.model.objects.all()
         queryset = DataSourceType.get_queryset(queryset, info)

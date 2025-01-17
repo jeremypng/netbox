@@ -8,12 +8,14 @@ from .types import *
 from .filters import *
 from netbox.graphql.resolvers import list_resolver
 
+from netbox.graphql.fields import CustomStrawberryDjangoField
+
 
 @strawberry.type(name='Query')
 class VirtualizationQuery:
     cluster: ClusterType = strawberry_django.field()
 
-    @strawberry_django.field
+    @strawberry_django.field(field_cls=CustomStrawberryDjangoField)
     def cluster_list(self, info: Info, filters: ClusterFilter | None = strawberry.UNSET) -> List[ClusterType]:
         queryset = ClusterType.__strawberry_django_definition__.model.objects.all()
         queryset = ClusterType.get_queryset(queryset, info)
@@ -21,7 +23,7 @@ class VirtualizationQuery:
 
     cluster_group: ClusterGroupType = strawberry_django.field()
 
-    @strawberry_django.field
+    @strawberry_django.field(field_cls=CustomStrawberryDjangoField)
     def cluster_group_list(
         self, info: Info, filters: ClusterGroupFilter | None = strawberry.UNSET
     ) -> List[ClusterGroupType]:
@@ -31,7 +33,7 @@ class VirtualizationQuery:
 
     cluster_type: ClusterTypeType = strawberry_django.field()
 
-    @strawberry_django.field
+    @strawberry_django.field(field_cls=CustomStrawberryDjangoField)
     def cluster_type_list(
         self, info: Info, filters: ClusterTypeFilter | None = strawberry.UNSET
     ) -> List[ClusterTypeType]:
@@ -41,7 +43,7 @@ class VirtualizationQuery:
 
     virtual_machine: VirtualMachineType = strawberry_django.field()
 
-    @strawberry_django.field
+    @strawberry_django.field(field_cls=CustomStrawberryDjangoField)
     def virtual_machine_list(
         self, info: Info, filters: VirtualMachineFilter | None = strawberry.UNSET
     ) -> List[VirtualMachineType]:
@@ -51,7 +53,7 @@ class VirtualizationQuery:
 
     vm_interface: VMInterfaceType = strawberry_django.field()
 
-    @strawberry_django.field
+    @strawberry_django.field(field_cls=CustomStrawberryDjangoField)
     def vm_interface_list(
         self, info: Info, filters: VMInterfaceFilter | None = strawberry.UNSET
     ) -> List[VMInterfaceType]:
@@ -61,7 +63,7 @@ class VirtualizationQuery:
 
     virtual_disk: VirtualDiskType = strawberry_django.field()
 
-    @strawberry_django.field
+    @strawberry_django.field(field_cls=CustomStrawberryDjangoField)
     def virtual_disk_list(
         self, info: Info, filters: VirtualDiskFilter | None = strawberry.UNSET
     ) -> List[VirtualDiskType]:

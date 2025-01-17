@@ -8,12 +8,14 @@ from .types import *
 from .filters import *
 from netbox.graphql.resolvers import list_resolver
 
+from netbox.graphql.fields import CustomStrawberryDjangoField
+
 
 @strawberry.type(name='Query')
 class TenancyQuery:
     tenant: TenantType = strawberry_django.field()
 
-    @strawberry_django.field
+    @strawberry_django.field(field_cls=CustomStrawberryDjangoField)
     def tenant_list(self, info: Info, filters: TenantFilter | None = strawberry.UNSET) -> List[TenantType]:
         queryset = TenantType.__strawberry_django_definition__.model.objects.all()
         queryset = TenantType.get_queryset(queryset, info)
@@ -21,7 +23,7 @@ class TenancyQuery:
 
     tenant_group: TenantGroupType = strawberry_django.field()
 
-    @strawberry_django.field
+    @strawberry_django.field(field_cls=CustomStrawberryDjangoField)
     def tenant_group_list(
         self, info: Info, filters: TenantGroupFilter | None = strawberry.UNSET
     ) -> List[TenantGroupType]:
@@ -31,7 +33,7 @@ class TenancyQuery:
 
     contact: ContactType = strawberry_django.field()
 
-    @strawberry_django.field
+    @strawberry_django.field(field_cls=CustomStrawberryDjangoField)
     def contact_list(self, info: Info, filters: ContactFilter | None = strawberry.UNSET) -> List[ContactType]:
         queryset = ContactType.__strawberry_django_definition__.model.objects.all()
         queryset = ContactType.get_queryset(queryset, info)
@@ -39,7 +41,7 @@ class TenancyQuery:
 
     contact_role: ContactRoleType = strawberry_django.field()
 
-    @strawberry_django.field
+    @strawberry_django.field(field_cls=CustomStrawberryDjangoField)
     def contact_role_list(
         self, info: Info, filters: ContactRoleFilter | None = strawberry.UNSET
     ) -> List[ContactRoleType]:
@@ -49,7 +51,7 @@ class TenancyQuery:
 
     contact_group: ContactGroupType = strawberry_django.field()
 
-    @strawberry_django.field
+    @strawberry_django.field(field_cls=CustomStrawberryDjangoField)
     def contact_group_list(
         self, info: Info, filters: ContactGroupFilter | None = strawberry.UNSET
     ) -> List[ContactGroupType]:
@@ -59,7 +61,7 @@ class TenancyQuery:
 
     contact_assignment: ContactAssignmentType = strawberry_django.field()
 
-    @strawberry_django.field
+    @strawberry_django.field(field_cls=CustomStrawberryDjangoField)
     def contact_assignment_list(
         self, info: Info, filters: ContactAssignmentFilter | None = strawberry.UNSET
     ) -> List[ContactAssignmentType]:

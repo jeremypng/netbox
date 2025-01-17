@@ -1,3 +1,4 @@
+import inspect
 from typing import TypeVar
 
 from datetime import datetime, date, time
@@ -5,6 +6,7 @@ from django.db.utils import ProgrammingError, OperationalError
 from django.db.models.fields import BigAutoField, BigIntegerField, BooleanField, CharField, DateField, DateTimeField
 from django.db.models.fields import EmailField, GenericIPAddressField, IntegerField, PositiveIntegerField, SlugField
 from django.db.models.fields import TextField, URLField
+from django.db.models.fields.related_descriptors import ForwardManyToOneDescriptor, ReverseManyToOneDescriptor
 import django_filters
 import strawberry
 from strawberry_django import FilterLookup, ComparisonFilterLookup, DateFilterLookup, DatetimeFilterLookup
@@ -15,6 +17,62 @@ from netbox.graphql.scalars import BigInt
 from utilities.filters import *
 
 T = TypeVar('T')
+
+
+class FilterSchemaBuilder:
+    _filter_stubs = {}
+    _relationships = {}
+
+    @classmethod
+    def register_filter(cls, model, original_filter):
+        model_path = f"{model.__module__}.{model.__name__}"
+        if model_path not in cls._filter_stubs:
+            cls._filter_stubs[model_path] = original_filter
+
+    @classmethod
+    def register_relationship(cls, source_model, field_name, target_model):
+        source_path = f"{source_model.__module__}.{source_model.__name__}"
+        if source_path not in cls._relationships:
+            cls._relationships[source_path] = []
+        # Don't register self-referential relationships
+        if source_model != target_model:
+            cls._relationships[source_path].append((field_name, target_model))
+
+    @classmethod
+    def rebuild_filters(cls):
+        from strawberry_django import filter as strawberry_filter
+
+        rebuilt_filters = {}
+        for model_path, original_filter in cls._filter_stubs.items():
+            model = original_filter.filterset._meta.model
+
+            # Get original annotations from autotype decorator
+            original_annotations = getattr(original_filter, '__annotations__', {})
+            annotations = original_annotations.copy()
+
+            # Add relationships info
+            relationships = {}
+            for field_name, target_model in cls._relationships.get(model_path, []):
+                target_path = f"{target_model.__module__}.{target_model.__name__}"
+                target_filter = cls._filter_stubs.get(target_path)
+                if target_filter and target_model != model:
+                    annotations[field_name] = target_filter | None
+                    relationships[field_name] = target_filter
+
+            # Create new filter with combined annotations
+            new_filter = type(
+                f"{model.__name__}Filter",
+                (BaseFilterMixin,),
+                {
+                    "__annotations__": annotations,
+                    "__relationships__": relationships  # Store relationship info
+                }
+            )
+
+            decorated_filter = strawberry_filter(model, lookups=True)(new_filter)
+            rebuilt_filters[model_path] = decorated_filter
+
+        return rebuilt_filters
 
 
 def map_strawberry_type(field):
@@ -188,6 +246,24 @@ def autotype_decorator(filterset):
 
                 create_attribute(cls, fieldname, attr_type)
 
+        # Handle related ManyToOne fields
+        many_to_one_fields = [attr[0] for attr in inspect.getmembers(model) if isinstance(attr[1],
+            ForwardManyToOneDescriptor)]
+        for fieldname in many_to_one_fields:
+            if fieldname not in cls.__annotations__:
+                model_field = getattr(model, fieldname)
+                related_model = model_field.field.related_model
+                FilterSchemaBuilder.register_relationship(model, fieldname, related_model)
+
+        # Handle related ReverseManyToOneDescriptor fields
+        reverse_many_to_one_fields = [attr[0] for attr in inspect.getmembers(model) if isinstance(attr[1],
+            ReverseManyToOneDescriptor)]
+        for fieldname in reverse_many_to_one_fields:
+            if fieldname not in cls.__annotations__:
+                model_field = getattr(model, fieldname)
+                related_model = model_field.rel.related_model
+                FilterSchemaBuilder.register_relationship(model, fieldname, related_model)
+
         # Handle filterset declared filters
         declared_filters = filterset.declared_filters
         for fieldname, field in declared_filters.items():
@@ -220,10 +296,16 @@ def autotype_decorator(filterset):
                 ):
                     custom_field = True
                     attr_type = map_strawberry_type(filter)
+                    # if attr_type == FilterLookup[str] | None:
+                    #     # FilterLookup won't work on custom_field_data, so we need to use str
+                    #     attr_type = str | None
                     if attr_type is not None:
                         create_attribute(cls, filter_name, attr_type, custom_field)
                     if filter.field_name:
                         cls.__netbox_field_map__[filter_name] = filter.field_name
+
+        # Register original class and create stub
+        FilterSchemaBuilder.register_filter(model, cls)
 
         return cls
 

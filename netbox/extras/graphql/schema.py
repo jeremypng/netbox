@@ -8,12 +8,14 @@ from .types import *
 from .filters import *
 from netbox.graphql.resolvers import list_resolver
 
+from netbox.graphql.fields import CustomStrawberryDjangoField
+
 
 @strawberry.type(name='Query')
 class ExtrasQuery:
     config_context: ConfigContextType = strawberry_django.field()
 
-    @strawberry_django.field
+    @strawberry_django.field(field_cls=CustomStrawberryDjangoField)
     def config_context_list(
         self, info: Info, filters: ConfigContextFilter | None = strawberry.UNSET
     ) -> List[ConfigContextType]:
@@ -23,7 +25,7 @@ class ExtrasQuery:
 
     config_template: ConfigTemplateType = strawberry_django.field()
 
-    @strawberry_django.field
+    @strawberry_django.field(field_cls=CustomStrawberryDjangoField)
     def config_template_list(
         self, info: Info, filters: ConfigTemplateFilter | None = strawberry.UNSET
     ) -> List[ConfigTemplateType]:
@@ -33,7 +35,7 @@ class ExtrasQuery:
 
     custom_field: CustomFieldType = strawberry_django.field()
 
-    @strawberry_django.field
+    @strawberry_django.field(field_cls=CustomStrawberryDjangoField)
     def custom_field_list(
         self, info: Info, filters: CustomFieldFilter | None = strawberry.UNSET
     ) -> List[CustomFieldType]:
@@ -43,7 +45,7 @@ class ExtrasQuery:
 
     custom_field_choice_set: CustomFieldChoiceSetType = strawberry_django.field()
 
-    @strawberry_django.field
+    @strawberry_django.field(field_cls=CustomStrawberryDjangoField)
     def custom_field_choice_set_list(
         self, info: Info, filters: CustomFieldChoiceSetFilter | None = strawberry.UNSET
     ) -> List[CustomFieldChoiceSetType]:
@@ -53,7 +55,7 @@ class ExtrasQuery:
 
     custom_link: CustomLinkType = strawberry_django.field()
 
-    @strawberry_django.field
+    @strawberry_django.field(field_cls=CustomStrawberryDjangoField)
     def custom_link_list(self, info: Info, filters: CustomLinkFilter | None = strawberry.UNSET) -> List[CustomLinkType]:
         queryset = CustomLinkType.__strawberry_django_definition__.model.objects.all()
         queryset = CustomLinkType.get_queryset(queryset, info)
@@ -61,7 +63,7 @@ class ExtrasQuery:
 
     export_template: ExportTemplateType = strawberry_django.field()
 
-    @strawberry_django.field
+    @strawberry_django.field(field_cls=CustomStrawberryDjangoField)
     def export_template_list(
         self, info: Info, filters: ExportTemplateFilter | None = strawberry.UNSET
     ) -> List[ExportTemplateType]:
@@ -71,7 +73,7 @@ class ExtrasQuery:
 
     image_attachment: ImageAttachmentType = strawberry_django.field()
 
-    @strawberry_django.field
+    @strawberry_django.field(field_cls=CustomStrawberryDjangoField)
     def image_attachment_list(
         self, info: Info, filters: ImageAttachmentFilter | None = strawberry.UNSET
     ) -> List[ImageAttachmentType]:
@@ -81,7 +83,7 @@ class ExtrasQuery:
 
     saved_filter: SavedFilterType = strawberry_django.field()
 
-    @strawberry_django.field
+    @strawberry_django.field(field_cls=CustomStrawberryDjangoField)
     def saved_filter_list(
         self, info: Info, filters: SavedFilterFilter | None = strawberry.UNSET
     ) -> List[SavedFilterType]:
@@ -91,7 +93,7 @@ class ExtrasQuery:
 
     journal_entry: JournalEntryType = strawberry_django.field()
 
-    @strawberry_django.field
+    @strawberry_django.field(field_cls=CustomStrawberryDjangoField)
     def journal_entry_list(
         self, info: Info, filters: JournalEntryFilter | None = strawberry.UNSET
     ) -> List[JournalEntryType]:
@@ -101,7 +103,7 @@ class ExtrasQuery:
 
     notification: NotificationType = strawberry_django.field()
 
-    @strawberry_django.field
+    @strawberry_django.field(field_cls=CustomStrawberryDjangoField)
     def notification_list(self, info: Info, filters: None = strawberry.UNSET) -> List[NotificationType]:
         queryset = NotificationType.__strawberry_django_definition__.model.objects.all()
         queryset = NotificationType.get_queryset(queryset, info)
@@ -109,7 +111,7 @@ class ExtrasQuery:
 
     notification_group: NotificationGroupType = strawberry_django.field()
 
-    @strawberry_django.field
+    @strawberry_django.field(field_cls=CustomStrawberryDjangoField)
     def notification_group_list(
         self, info: Info, filters: NotificationGroupFilter | None = strawberry.UNSET
     ) -> List[NotificationGroupType]:
@@ -119,7 +121,7 @@ class ExtrasQuery:
 
     subscription: SubscriptionType = strawberry_django.field()
 
-    @strawberry_django.field
+    @strawberry_django.field(field_cls=CustomStrawberryDjangoField)
     def subscription_list(self, info: Info, filters: None = strawberry.UNSET) -> List[SubscriptionType]:
         queryset = SubscriptionType.__strawberry_django_definition__.model.objects.all()
         queryset = SubscriptionType.get_queryset(queryset, info)
@@ -127,7 +129,7 @@ class ExtrasQuery:
 
     tag: TagType = strawberry_django.field()
 
-    @strawberry_django.field
+    @strawberry_django.field(field_cls=CustomStrawberryDjangoField)
     def tag_list(self, info: Info, filters: TagFilter | None = strawberry.UNSET) -> List[TagType]:
         queryset = TagType.__strawberry_django_definition__.model.objects.all()
         queryset = TagType.get_queryset(queryset, info)
@@ -135,7 +137,7 @@ class ExtrasQuery:
 
     webhook: WebhookType = strawberry_django.field()
 
-    @strawberry_django.field
+    @strawberry_django.field(field_cls=CustomStrawberryDjangoField)
     def webhook_list(self, info: Info, filters: WebhookFilter | None = strawberry.UNSET) -> List[WebhookType]:
         queryset = WebhookType.__strawberry_django_definition__.model.objects.all()
         queryset = WebhookType.get_queryset(queryset, info)
@@ -143,7 +145,7 @@ class ExtrasQuery:
 
     event_rule: EventRuleType = strawberry_django.field()
 
-    @strawberry_django.field
+    @strawberry_django.field(field_cls=CustomStrawberryDjangoField)
     def event_rule_list(self, info: Info, filters: EventRuleFilter | None = strawberry.UNSET) -> List[EventRuleType]:
         queryset = EventRuleType.__strawberry_django_definition__.model.objects.all()
         queryset = EventRuleType.get_queryset(queryset, info)
