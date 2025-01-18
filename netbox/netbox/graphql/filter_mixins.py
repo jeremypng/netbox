@@ -6,14 +6,15 @@ from django.db.utils import ProgrammingError, OperationalError
 from django.db.models.fields import BigAutoField, BigIntegerField, BooleanField, CharField, DateField, DateTimeField
 from django.db.models.fields import EmailField, GenericIPAddressField, IntegerField, PositiveIntegerField, SlugField
 from django.db.models.fields import TextField, URLField
-from django.db.models.fields.related_descriptors import (ForwardManyToOneDescriptor,
-    ReverseManyToOneDescriptor
-)
+from django.db.models.fields.related_descriptors import ForwardManyToOneDescriptor, ReverseManyToOneDescriptor, ManyToManyDescriptor
 import django_filters
 import strawberry
+from strawberry import auto
 from strawberry_django import FilterLookup, ComparisonFilterLookup, DateFilterLookup, DatetimeFilterLookup
 from strawberry_django import TimeFilterLookup
 from django.core.exceptions import FieldDoesNotExist
+from strawberry.scalars import ID
+
 
 from netbox.graphql.scalars import BigInt
 from utilities.filters import *
@@ -27,13 +28,13 @@ class FilterSchemaBuilder:
 
     @classmethod
     def register_filter(cls, model, original_filter):
-        model_path = f"{model.__module__}.{model.__name__}"
+        model_path = f'{model.__module__}.{model.__name__}'
         if model_path not in cls._filter_stubs:
             cls._filter_stubs[model_path] = original_filter
 
     @classmethod
     def register_relationship(cls, source_model, field_name, target_model):
-        source_path = f"{source_model.__module__}.{source_model.__name__}"
+        source_path = f'{source_model.__module__}.{source_model.__name__}'
         if source_path not in cls._relationships:
             cls._relationships[source_path] = []
         # Don't register self-referential relationships
@@ -55,19 +56,19 @@ class FilterSchemaBuilder:
             # Add relationships, excluding self-references
             relationships = cls._relationships.get(model_path, [])
             for field_name, target_model in relationships:
-                target_path = f"{target_model.__module__}.{target_model.__name__}"
+                target_path = f'{target_model.__module__}.{target_model.__name__}'
                 target_filter = cls._filter_stubs.get(target_path)
                 if target_filter and target_model != model:  # Exclude self-references
                     annotations[field_name] = target_filter | None
 
             # Create new filter with combined annotations
             new_filter = type(
-                f"{model.__name__}Filter",
+                f'{model.__name__}Filter',
                 (BaseFilterMixin,),
                 {
-                    "__annotations__": annotations,
-                    "__relationships__": relationships  # Store relationship info
-                }
+                    '__annotations__': annotations,
+                    '__relationships__': relationships,  # Store relationship info
+                },
             )
 
             decorated_filter = strawberry_filter(model, lookups=True)(new_filter)
@@ -201,28 +202,283 @@ def map_strawberry_type(field):
     return attr_type, register_relationship
 
 
+# def autotype_decorator(filterset):
+#     """
+#     Decorator used to auto creates a dataclass used by Strawberry based on a filterset.
+#     Must go after the Strawberry decorator as follows:
+
+#     @strawberry_django.filter(models.Example, lookups=True)
+#     @autotype_decorator(filtersets.ExampleFilterSet)
+#     class ExampleFilter(BaseFilterMixin):
+#         pass
+
+#     The Filter itself must be derived from BaseFilterMixin.  For items listed in meta.fields
+#     of the filterset, usually just a type specifier is generated, so for
+#     `fields = [created, ]` the dataclass would be:
+
+#     class ExampleFilter(BaseFilterMixin):
+#         created: auto
+
+#     For other filter fields a function needs to be created for Strawberry with the
+#     naming convention `filter_{fieldname}` which is auto detected and called by
+#     Strawberry, this function uses the filterset to handle the query.
+#     """
+
+#     def create_attribute(cls, fieldname, attr_type, custom_field=False):
+#         if fieldname not in cls.__annotations__ and attr_type:
+#             cls.__annotations__[fieldname] = attr_type
+
+#     def wrapper(cls):
+#         cls.filterset = filterset
+#         fields = filterset.get_fields()
+#         model = filterset._meta.model
+
+#         # Handle regular model fields
+#         for fieldname in fields.keys():
+#             attr_type = None
+#             if fieldname not in cls.__annotations__:
+#                 try:
+#                     field = model._meta.get_field(fieldname)
+#                 except FieldDoesNotExist:
+#                     continue
+
+#                 attr_type, _ = map_strawberry_type(field)
+
+#                 create_attribute(cls, fieldname, attr_type)
+
+#         # Handle related ManyToOne fields
+#         many_to_one_fields = [attr[0] for attr in inspect.getmembers(model) if isinstance(attr[1],
+#             ForwardManyToOneDescriptor)]
+#         for fieldname in many_to_one_fields:
+#             if fieldname not in cls.__annotations__:
+#                 model_field = getattr(model, fieldname)
+#                 related_model = model_field.field.related_model
+#                 FilterSchemaBuilder.register_relationship(model, fieldname, related_model)
+
+#         # Handle related ReverseManyToOneDescriptor fields
+#         reverse_many_to_one_fields = [attr[0] for attr in inspect.getmembers(model) if isinstance(attr[1],
+#             ReverseManyToOneDescriptor)]
+#         for fieldname in reverse_many_to_one_fields:
+#             if fieldname not in cls.__annotations__:
+#                 model_field = getattr(model, fieldname)
+#                 related_model = model_field.rel.related_model
+#                 FilterSchemaBuilder.register_relationship(model, fieldname, related_model)
+
+#         # Handle filterset declared filters
+#         declared_filters = filterset.declared_filters
+#         for fieldname, field in declared_filters.items():
+#             attr_type, register_relationship = map_strawberry_type(field)
+#             if (isinstance(field, django_filters.ModelMultipleChoiceFilter) or
+#                 isinstance(field, django_filters.ModelChoiceFilter)) and fieldname.endswith('_id'):
+#                 attr_type = int | None
+#             elif register_relationship:
+#                 if getattr(field.queryset, 'model', None):
+#                     related_model = field.queryset.model
+#                     FilterSchemaBuilder.register_relationship(model, fieldname, related_model)
+#                     continue
+#             else:
+#                 attr_type, _ = map_strawberry_type(field)
+#             if attr_type is None:
+#                 raise NotImplementedError(f'GraphQL Filter field unknown: {fieldname}: {field}')
+
+#             create_attribute(cls, fieldname, attr_type)
+
+#         # Handle runtime custom field filters with an instance of the filterset
+#         # This will fail if the database does not exist yet (ie: on first startup)
+#         # so we need to catch the exception and continue
+#         try:
+#             filterset_instance = filterset()
+#         except ProgrammingError:
+#             # Occurs when initial database migrations have not been applied.
+#             return cls
+#         except OperationalError:
+#             # Occurs during testing if there is no database as defined in configuration_testing.py
+#             return cls
+
+#         # Handle custom field filters and build a translation map for use in the resolver
+#         if filterset_instance:
+#             cls.__netbox_field_map__ = {}
+#             for filter_name, filter in filterset_instance.filters.items():
+#                 if (
+#                     getattr(filter, 'custom_field', None)
+#                     and filter_name.find('__') == -1
+#                     and filter_name not in cls.__annotations__
+#                 ):
+#                     custom_field = True
+#                     attr_type, _ = map_strawberry_type(filter)
+#                     if attr_type is not None:
+#                         create_attribute(cls, filter_name, attr_type, custom_field)
+#                     if filter.field_name:
+#                         cls.__netbox_field_map__[filter_name] = filter.field_name
+
+#         # Register original class and create stub
+#         FilterSchemaBuilder.register_filter(model, cls)
+
+#         return cls
+
+#     return wrapper
+
+
+# def get_model_descriptors(model):
+#     """Get all relevant descriptors from a model"""
+#     descriptors = {}
+    
+#     model_attrs = {name: attr for name, attr in model.__dict__.items()}
+    
+#     # Get ForwardManyToOne relationships (ForeignKey)
+#     for name, attr in model_attrs.items():
+#         if isinstance(attr, ForwardManyToOneDescriptor):
+#             base_name = name.rstrip('_id')
+#             descriptors[f"{base_name}_id"] = attr
+#             descriptors[base_name] = attr
+    
+#     # Get ManyToMany relationships
+#     for name, attr in model_attrs.items():
+#         if isinstance(attr, ManyToManyDescriptor):
+#             singular_name = name.rstrip('s')
+#             descriptors[f"{singular_name}_id"] = attr
+#             descriptors[singular_name] = attr
+#             descriptors[f"{singular_name}_exact"] = attr
+
+#     # Get ReverseOneToMany relationships
+#     for name, attr in model_attrs.items():
+#         if isinstance(attr, ReverseManyToOneDescriptor):
+#             # For reverse relationships like device_types -> devices
+#             # we want to create filters like device_id and device_exact
+#             singular_name = name.rstrip('s')  # devices -> device
+#             descriptors[f"{singular_name}_id"] = attr
+#             descriptors[singular_name] = attr
+#             descriptors[f"{singular_name}_exact"] = attr
+            
+#     return descriptors
+
+# def autotype_decorator(filterset):
+#     """
+#     Decorator used to auto creates a dataclass used by Strawberry based on a filterset.
+#     """
+#     def create_attribute(cls, fieldname, attr_type, custom_field=False):
+#         if fieldname not in cls.__annotations__ and attr_type:
+#             cls.__annotations__[fieldname] = attr_type
+
+#     def wrapper(cls):
+#         cls.filterset = filterset
+#         fields = filterset.get_fields()
+#         model = filterset._meta.model
+
+#         # Get all model descriptors first
+#         descriptors = get_model_descriptors(model)
+
+#         # Handle regular model fields
+#         for fieldname in fields.keys():
+#             attr_type = None
+#             if fieldname not in cls.__annotations__:
+#                 try:
+#                     field = model._meta.get_field(fieldname)
+#                 except FieldDoesNotExist:
+#                     # Check if it's a descriptor-based field
+#                     if fieldname in descriptors:
+#                         # For M2M, FK and reverse relationships, add appropriate filter types
+#                         if isinstance(descriptors[fieldname], (ManyToManyDescriptor, ForwardManyToOneDescriptor, ReverseManyToOneDescriptor)):
+#                             attr_type = FilterLookup[int] | None
+#                     continue
+
+#                 attr_type, _ = map_strawberry_type(field)
+#                 create_attribute(cls, fieldname, attr_type)
+
+#         # Add descriptor-based fields that aren't already covered
+#         for fieldname, descriptor in descriptors.items():
+#             if fieldname not in cls.__annotations__:
+#                 if isinstance(descriptor, (ManyToManyDescriptor, ReverseManyToOneDescriptor)):
+#                     create_attribute(cls, fieldname, FilterLookup[int] | None)
+#                 elif isinstance(descriptor, ForwardManyToOneDescriptor):
+#                     create_attribute(cls, fieldname, FilterLookup[int] | None)
+
+#         # Handle filterset declared filters
+#         declared_filters = filterset.declared_filters
+#         for fieldname, field in declared_filters.items():
+#             attr_type, register_relationship = map_strawberry_type(field)
+#             if (isinstance(field, django_filters.ModelMultipleChoiceFilter) or
+#                 isinstance(field, django_filters.ModelChoiceFilter)) and fieldname.endswith('_id'):
+#                 attr_type = int | None
+#             elif register_relationship:
+#                 if getattr(field.queryset, 'model', None):
+#                     related_model = field.queryset.model
+#                     FilterSchemaBuilder.register_relationship(model, fieldname, related_model)
+#                     continue
+#             else:
+#                 attr_type, _ = map_strawberry_type(field)
+
+#             if attr_type is None:
+#                 raise NotImplementedError(f'GraphQL Filter field unknown: {fieldname}: {field}')
+
+#             create_attribute(cls, fieldname, attr_type)
+
+#         # Handle runtime custom field filters
+#         try:
+#             filterset_instance = filterset()
+#         except (ProgrammingError, OperationalError):
+#             return cls
+
+#         # Handle custom field filters and build translation map
+#         if filterset_instance:
+#             cls.__netbox_field_map__ = {}
+#             for filter_name, filter in filterset_instance.filters.items():
+#                 if (getattr(filter, 'custom_field', None) 
+#                     and filter_name.find('__') == -1 
+#                     and filter_name not in cls.__annotations__):
+#                     custom_field = True
+#                     attr_type, _ = map_strawberry_type(filter)
+#                     if attr_type is not None:
+#                         create_attribute(cls, filter_name, attr_type, custom_field)
+#                     if filter.field_name:
+#                         cls.__netbox_field_map__[filter_name] = filter.field_name
+
+#         # Register original class and create stub
+#         FilterSchemaBuilder.register_filter(model, cls)
+
+#         return cls
+
+#     return wrapper
+
+
+def get_model_descriptors(model):
+    """Get all relevant descriptors from a model"""
+    descriptors = {}
+    related_models = {}
+    
+    model_attrs = {name: attr for name, attr in model.__dict__.items()}
+    
+    # Get ForwardManyToOne relationships (ForeignKey)
+    for name, attr in model_attrs.items():
+        if isinstance(attr, ForwardManyToOneDescriptor):
+            base_name = name.rstrip('_id')
+            descriptors[f"{base_name}_id"] = ('id', attr)
+            descriptors[base_name] = ('relation', attr)
+            if hasattr(attr, 'field'):
+                related_models[base_name] = attr.field.related_model
+    
+    # Get ManyToMany relationships
+    for name, attr in model_attrs.items():
+        if isinstance(attr, ManyToManyDescriptor):
+            singular_name = name.rstrip('s')
+            descriptors[f"{singular_name}_id"] = ('id', attr)
+            descriptors[singular_name] = ('relation', attr)
+            if hasattr(attr, 'field'):
+                related_models[singular_name] = attr.field.related_model
+
+    # Get ReverseOneToMany relationships
+    for name, attr in model_attrs.items():
+        if isinstance(attr, ReverseManyToOneDescriptor):
+            singular_name = name.rstrip('s')
+            descriptors[f"{singular_name}_id"] = ('id', attr)
+            descriptors[singular_name] = ('relation', attr)
+            if hasattr(attr, 'rel'):
+                related_models[singular_name] = attr.rel.related_model
+            
+    return descriptors, related_models
+
 def autotype_decorator(filterset):
-    """
-    Decorator used to auto creates a dataclass used by Strawberry based on a filterset.
-    Must go after the Strawberry decorator as follows:
-
-    @strawberry_django.filter(models.Example, lookups=True)
-    @autotype_decorator(filtersets.ExampleFilterSet)
-    class ExampleFilter(BaseFilterMixin):
-        pass
-
-    The Filter itself must be derived from BaseFilterMixin.  For items listed in meta.fields
-    of the filterset, usually just a type specifier is generated, so for
-    `fields = [created, ]` the dataclass would be:
-
-    class ExampleFilter(BaseFilterMixin):
-        created: auto
-
-    For other filter fields a function needs to be created for Strawberry with the
-    naming convention `filter_{fieldname}` which is auto detected and called by
-    Strawberry, this function uses the filterset to handle the query.
-    """
-
+    """Decorator used to auto creates a dataclass used by Strawberry based on a filterset."""
     def create_attribute(cls, fieldname, attr_type, custom_field=False):
         if fieldname not in cls.__annotations__ and attr_type:
             cls.__annotations__[fieldname] = attr_type
@@ -232,77 +488,68 @@ def autotype_decorator(filterset):
         fields = filterset.get_fields()
         model = filterset._meta.model
 
+        # Get all model descriptors first
+        descriptors, related_models = get_model_descriptors(model)
+
         # Handle regular model fields
         for fieldname in fields.keys():
             attr_type = None
             if fieldname not in cls.__annotations__:
                 try:
-                    field = model._meta.get_field(fieldname)
+                    if fieldname == "id":
+                        attr_type = ID | None
+                    else:
+                        field = model._meta.get_field(fieldname)
+                        attr_type, _ = map_strawberry_type(field)
                 except FieldDoesNotExist:
                     continue
 
-                attr_type, _ = map_strawberry_type(field)
-
                 create_attribute(cls, fieldname, attr_type)
 
-        # Handle related ManyToOne fields
-        many_to_one_fields = [attr[0] for attr in inspect.getmembers(model) if isinstance(attr[1],
-            ForwardManyToOneDescriptor)]
-        for fieldname in many_to_one_fields:
-            if fieldname not in cls.__annotations__:
-                model_field = getattr(model, fieldname)
-                related_model = model_field.field.related_model
-                FilterSchemaBuilder.register_relationship(model, fieldname, related_model)
-
-        # Handle related ReverseManyToOneDescriptor fields
-        reverse_many_to_one_fields = [attr[0] for attr in inspect.getmembers(model) if isinstance(attr[1],
-            ReverseManyToOneDescriptor)]
-        for fieldname in reverse_many_to_one_fields:
-            if fieldname not in cls.__annotations__:
-                model_field = getattr(model, fieldname)
-                related_model = model_field.rel.related_model
-                FilterSchemaBuilder.register_relationship(model, fieldname, related_model)
+        # Add descriptor-based fields that aren't already covered
+        # for fieldname, (field_type, descriptor) in descriptors.items():
+        #     if fieldname not in cls.__annotations__:
+        #         if field_type == 'id':
+        #             create_attribute(cls, fieldname, ID | None)
+        #         else:
+        #             related_model = related_models.get(fieldname)
+        #             if related_model:
+        #                 FilterSchemaBuilder.register_relationship(model, fieldname, related_model)
+        #             # create_attribute(cls, fieldname, FilterLookup[int] | None)
 
         # Handle filterset declared filters
         declared_filters = filterset.declared_filters
         for fieldname, field in declared_filters.items():
             attr_type, register_relationship = map_strawberry_type(field)
-            if (isinstance(field, django_filters.ModelMultipleChoiceFilter) or
-                isinstance(field, django_filters.ModelChoiceFilter)) and fieldname.endswith('_id'):
-                attr_type = int | None
+            (field_type, _) = descriptors.get(fieldname, (None, None))
+            if field_type == 'id' or ((isinstance(field, django_filters.ModelMultipleChoiceFilter) or (isinstance(field, django_filters.ModelChoiceFilter))) and fieldname.endswith('_id')):
+                attr_type = ID | None
             elif register_relationship:
                 if getattr(field.queryset, 'model', None):
                     related_model = field.queryset.model
                     FilterSchemaBuilder.register_relationship(model, fieldname, related_model)
                     continue
-            else:
-                attr_type, _ = map_strawberry_type(field)
+            elif register_relationship and fieldname in cls.__annotations__:
+                continue
+
             if attr_type is None:
                 raise NotImplementedError(f'GraphQL Filter field unknown: {fieldname}: {field}')
 
             create_attribute(cls, fieldname, attr_type)
 
-        # Handle runtime custom field filters with an instance of the filterset
-        # This will fail if the database does not exist yet (ie: on first startup)
-        # so we need to catch the exception and continue
+        # Handle runtime custom field filters
         try:
             filterset_instance = filterset()
-        except ProgrammingError:
-            # Occurs when initial database migrations have not been applied.
-            return cls
-        except OperationalError:
-            # Occurs during testing if there is no database as defined in configuration_testing.py
+        except (ProgrammingError, OperationalError):
             return cls
 
-        # Handle custom field filters and build a translation map for use in the resolver
+        # Handle custom field filters and build translation map
         if filterset_instance:
             cls.__netbox_field_map__ = {}
             for filter_name, filter in filterset_instance.filters.items():
-                if (
-                    getattr(filter, 'custom_field', None)
-                    and filter_name.find('__') == -1
-                    and filter_name not in cls.__annotations__
-                ):
+                if (getattr(filter, 'custom_field', None) 
+                    and filter_name.find('__') == -1 
+                    and filter_name not in cls.__annotations__):
                     custom_field = True
                     attr_type, _ = map_strawberry_type(filter)
                     if attr_type is not None:
@@ -316,7 +563,6 @@ def autotype_decorator(filterset):
         return cls
 
     return wrapper
-
 
 @strawberry.input
 class BaseFilterMixin: ...
