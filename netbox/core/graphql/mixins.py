@@ -4,10 +4,10 @@ import strawberry
 import strawberry_django
 from django.contrib.contenttypes.models import ContentType
 
-from core.models import ObjectChange
+from extra.models import ObjectChange
 
 if TYPE_CHECKING:
-    from netbox.core.graphql.types import ObjectChangeType
+    from netbox.extra.graphql.types import ObjectChangeType
 
 __all__ = (
     'ChangelogMixin',
