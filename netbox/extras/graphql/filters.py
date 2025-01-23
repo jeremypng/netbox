@@ -226,14 +226,6 @@ class JournalEntryFilter(BaseObjectTypeFilterMixin, CustomFieldsFilterMixin, Tag
     comments: FilterLookup[str] | None = strawberry_django.filter_field()
 
 
-@strawberry_django.filter(models.NotificationGroup, lookups=True)
-class NotificationGroupFilter(BaseObjectTypeFilterMixin, ChangeLogFilterMixin):
-    name: FilterLookup[str] | None = strawberry_django.filter_field()
-    description: FilterLookup[str] | None = strawberry_django.filter_field()
-    groups: Annotated['GroupFilter', strawberry.lazy('users.graphql.filters')] | None = strawberry_django.filter_field()
-    users: Annotated['UserFilter', strawberry.lazy('users.graphql.filters')] | None = strawberry_django.filter_field()
-
-
 @strawberry_django.filter(models.SavedFilter, lookups=True)
 class SavedFilterFilter(BaseObjectTypeFilterMixin, ChangeLogFilterMixin):
     name: FilterLookup[str] | None = strawberry_django.filter_field()
@@ -297,3 +289,26 @@ class EventRuleFilter(BaseObjectTypeFilterMixin, CustomFieldsFilterMixin, TagsFi
         strawberry_django.filter_field()
     )
     comments: FilterLookup[str] | None = strawberry_django.filter_field()
+
+@strawberry_django.filter(models.ObjectChange, lookups=True)
+class ObjectChangeFilter:
+    id: ID | None = strawberry_django.filter_field()
+    time: DatetimeFilterLookup[datetime] | None = strawberry_django.filter_field()
+    user: Annotated['UserFilter', strawberry.lazy('users.graphql.filters')] | None = strawberry_django.filter_field()
+    user_name: FilterLookup[str] | None = strawberry_django.filter_field()
+    request_id: FilterLookup[str] | None = strawberry_django.filter_field()
+    action: FilterLookup[str] | None = strawberry_django.filter_field()
+    changed_object_type: Annotated['ContentTypeFilter', strawberry.lazy('core.graphql.filters')] | None = (
+        strawberry_django.filter_field()
+    )
+    changed_object_type_id: ID | None = strawberry_django.filter_field()
+    changed_object_id: ID | None = strawberry_django.filter_field()
+    related_object_type_id: ID | None = strawberry_django.filter_field()
+    related_object_id: ID | None = strawberry_django.filter_field()
+    object_repr: FilterLookup[str] | None = strawberry_django.filter_field()
+    prechange_data: Annotated['JSONFilter', strawberry.lazy('core.graphql.filter_lookups')] | None = (
+        strawberry_django.filter_field()
+    )
+    postchange_data: Annotated['JSONFilter', strawberry.lazy('core.graphql.filter_lookups')] | None = (
+        strawberry_django.filter_field()
+    )

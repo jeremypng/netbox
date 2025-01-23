@@ -9,6 +9,7 @@ from strawberry_django import DatetimeFilterLookup
 
 if TYPE_CHECKING:
     from .filters import *
+    from extras.graphql.filters import *
 
 __all__ = ['BaseFilterMixin', 'BaseObjectTypeFilterMixin', 'ChangeLogFilterMixin']
 
@@ -24,7 +25,7 @@ class BaseObjectTypeFilterMixin(BaseFilterMixin):
 
 @dataclass
 class ChangeLogFilterMixin(BaseFilterMixin):
-    changelog: Annotated['ObjectChangeFilter', strawberry.lazy('core.graphql.filters')] | None = (
+    changelog: Annotated['ObjectChangeFilter', strawberry.lazy('extras.graphql.filters')] | None = (
         strawberry_django.filter_field()
     )
     created: DatetimeFilterLookup[datetime] | None = strawberry_django.filter_field()

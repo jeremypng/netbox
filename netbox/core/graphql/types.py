@@ -34,15 +34,6 @@ class DataSourceType(NetBoxObjectType):
     datafiles: List[Annotated["DataFileType", strawberry.lazy('core.graphql.types')]]
 
 
-@strawberry_django.type(
-    models.ObjectChange,
-    fields='__all__',
-    filters=ObjectChangeFilter
-)
-class ObjectChangeType(BaseObjectType):
-    pass
-
-
 @strawberry_django.type(DjangoContentType, fields='__all__')
 class ContentType:
     pass

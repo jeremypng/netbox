@@ -319,15 +319,6 @@ class FrontPortTemplateFilter(ModularComponentTemplateFilterMixin):
     )
 
 
-@strawberry_django.filter(models.MACAddress, lookups=True)
-class MACAddressFilter(PrimaryModelFilterMixin):
-    mac_address: FilterLookup[str] | None = strawberry_django.filter_field()
-    assigned_object_type: Annotated['ContentTypeFilter', strawberry.lazy('core.graphql.filters')] | None = (
-        strawberry_django.filter_field()
-    )
-    assigned_object_id: ID | None = strawberry_django.filter_field()
-
-
 @strawberry_django.filter(models.Interface, lookups=True)
 class InterfaceFilter(ModularComponentModelFilterMixin, InterfaceBaseFilterMixin, CabledObjectModelFilterMixin):
     vcdcs: Annotated['VirtualDeviceContextFilter', strawberry.lazy('dcim.graphql.filters')] | None = (
@@ -379,9 +370,7 @@ class InterfaceFilter(ModularComponentModelFilterMixin, InterfaceBaseFilterMixin
     ip_addresses: Annotated['IPAddressFilter', strawberry.lazy('ipam.graphql.filters')] | None = (
         strawberry_django.filter_field()
     )
-    mac_addresses: Annotated['MACAddressFilter', strawberry.lazy('dcim.graphql.filters')] | None = (
-        strawberry_django.filter_field()
-    )
+    mac_addresses: FilterLookup[str] | None = strawberry_django.filter_field()
     fhrp_group_assignments: Annotated['FHRPGroupAssignmentFilter', strawberry.lazy('ipam.graphql.filters')] | None = (
         strawberry_django.filter_field()
     )
@@ -637,28 +626,11 @@ class PowerPortTemplateFilter(ModularComponentTemplateFilterMixin):
     )
 
 
-@strawberry_django.filter(models.RackType, lookups=True)
-class RackTypeFilter(RackBaseFilterMixin):
-    form_factor: Annotated['RackFormFactorEnum', strawberry.lazy('dcim.graphql.enums')] | None = (
-        strawberry_django.filter_field()
-    )
-    manufacturer: Annotated['ManufacturerFilter', strawberry.lazy('dcim.graphql.filters')] | None = (
-        strawberry_django.filter_field()
-    )
-    manufacturer_id: ID | None = strawberry_django.filter_field()
-    model: FilterLookup[str] | None = strawberry_django.filter_field()
-    slug: FilterLookup[str] | None = strawberry_django.filter_field()
-
-
 @strawberry_django.filter(models.Rack, lookups=True)
 class RackFilter(ContactFilterMixin, ImageAttachmentFilterMixin, RackBaseFilterMixin):
     form_factor: Annotated['RackFormFactorEnum', strawberry.lazy('dcim.graphql.enums')] | None = (
         strawberry_django.filter_field()
     )
-    rack_type: Annotated['RackTypeFilter', strawberry.lazy('dcim.graphql.filters')] | None = (
-        strawberry_django.filter_field()
-    )
-    rack_type_id: ID | None = strawberry_django.filter_field()
     name: FilterLookup[str] | None = strawberry_django.filter_field()
     facility_id: FilterLookup[str] | None = strawberry_django.filter_field()
     site: Annotated['SiteFilter', strawberry.lazy('dcim.graphql.filters')] | None = strawberry_django.filter_field()

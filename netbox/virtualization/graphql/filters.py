@@ -150,9 +150,7 @@ class VMInterfaceFilter(VMComponentFilterMixin, InterfaceBaseFilterMixin):
     l2vpn_terminations: Annotated['L2VPNFilter', strawberry.lazy('vpn.graphql.filters')] | None = (
         strawberry_django.filter_field()
     )
-    mac_addresses: Annotated['MACAddressFilter', strawberry.lazy('dcim.graphql.filters')] | None = (
-        strawberry_django.filter_field()
-    )
+    mac_addresses: FilterLookup[str] | None = strawberry_django.filter_field()
 
 
 @strawberry_django.filter(models.VirtualDisk, lookups=True)

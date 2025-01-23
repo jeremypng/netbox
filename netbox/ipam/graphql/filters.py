@@ -319,26 +319,6 @@ class VLANGroupFilter(OrganizationalModelFilterMixin):
     )
 
 
-@strawberry_django.filter(models.VLANTranslationPolicy, lookups=True)
-class VLANTranslationPolicyFilter(PrimaryModelFilterMixin):
-    name: FilterLookup[str] | None = strawberry_django.filter_field()
-
-
-@strawberry_django.filter(models.VLANTranslationRule, lookups=True)
-class VLANTranslationRuleFilter(NetBoxModelFilterMixin):
-    policy: Annotated['VLANTranslationPolicyFilter', strawberry.lazy('ipam.graphql.filters')] | None = (
-        strawberry_django.filter_field()
-    )
-    policy_id: ID | None = strawberry_django.filter_field()
-    description: FilterLookup[str] | None = strawberry_django.filter_field()
-    local_vid: Annotated['IntegerLookup', strawberry.lazy('core.graphql.filter_lookups')] | None = (
-        strawberry_django.filter_field()
-    )
-    remote_vid: Annotated['IntegerLookup', strawberry.lazy('core.graphql.filter_lookups')] | None = (
-        strawberry_django.filter_field()
-    )
-
-
 @strawberry_django.filter(models.VRF, lookups=True)
 class VRFFilter(PrimaryModelFilterMixin):
     name: FilterLookup[str] | None = strawberry_django.filter_field()
