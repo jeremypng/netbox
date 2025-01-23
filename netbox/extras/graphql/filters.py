@@ -4,6 +4,7 @@ from strawberry.scalars import ID
 import strawberry_django
 from strawberry_django import (
     FilterLookup,
+    DatetimeFilterLookup,
 )
 from netbox.graphql.filter_mixins import (
     BaseObjectTypeFilterMixin,
