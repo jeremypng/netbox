@@ -4,11 +4,13 @@ from typing import TypeVar, TYPE_CHECKING, Annotated
 
 from datetime import datetime
 import strawberry
+from strawberry import ID
 import strawberry_django
 from strawberry_django import FilterLookup, DatetimeFilterLookup
 
 from extras.models import *
 from utilities.filters import *
+from core.graphql.filter_lookups import *
 from core.graphql.filter_mixins import *
 from extras.graphql.filter_mixins import *
 
@@ -49,6 +51,11 @@ class NestedGroupModelFilterMixin(NetBoxModelFilterMixin):
     name: FilterLookup[str] | None = strawberry_django.filter_field()
     slug: FilterLookup[str] | None = strawberry_django.filter_field()
     description: FilterLookup[str] | None = strawberry_django.filter_field()
+    lft: IntegerLookup | None = strawberry_django.filter_field()
+    rght: IntegerLookup | None = strawberry_django.filter_field()
+    tree_id: IntegerLookup | None = strawberry_django.filter_field()
+    level: IntegerLookup | None = strawberry_django.filter_field()
+    parent_id: ID | None = strawberry_django.filter_field()
 
 
 @dataclass
